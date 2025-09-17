@@ -109,6 +109,43 @@ journalctl -u jaw.service -f
 
 ---
 
+## 4.1 Benodigde pakketten
+
+Voor een correcte werking moeten de volgende pakketten aanwezig zijn:
+
+### Beide Pi’s (ogen)
+- python3
+- python3-pip
+- pygame
+- git
+- python-snap7 (optioneel, alleen nodig als je direct vanuit de Pi met de PLC wilt testen)
+
+### Rechter Pi (kaak)
+- Alles hierboven
+- dynamixel-sdk (voor aansturing Dynamixel servo’s via USB/RS485)
+
+### Installatie
+```bash
+# basis
+sudo apt update
+sudo apt install -y python3 python3-pip git
+
+# pygame
+pip3 install pygame
+
+# dynamixel (alleen rechter Pi)
+pip3 install dynamixel-sdk
+
+# optioneel: snap7
+pip3 install python-snap7
+```
+
+### Handigheid: requirements.txt
+In de repo kan een `requirements.txt` staan, die installeer je met:
+```bash
+pip3 install -r requirements.txt
+```
+
 ## 5. Installatie & Deployment
 
 ### Eerste keer op een Pi
@@ -151,6 +188,36 @@ journalctl -u jaw.service -f
   sudo netstat -anu | grep 500
   ```
 
+### 6.1 Vast IP-adres instellen (aanbevolen)
+
+Voor stabiele communicatie met de PLC moeten beide Pi’s een vast IP-adres krijgen.
+
+1. Open het configuratiebestand:
+   ```
+   sudo nano /etc/dhcpcd.conf
+   ```
+
+2. Voeg onderaan toe (pas IP’s en gateway aan naar je netwerk):
+   ```
+   interface eth0
+   static ip_address=192.168.0.101/24
+   static routers=192.168.0.1
+   static domain_name_servers=192.168.0.1
+
+   # voorbeeld: linker Pi = 192.168.0.101, rechter Pi = 192.168.0.102
+   ```
+
+3. Opslaan en rebooten:
+   ```
+   sudo reboot
+   ```
+
+4. Controle:
+   ```
+   ip addr show eth0
+   ping <PLC-IP>
+   ```
+
 ---
 
 ## 7. Troubleshooting
@@ -172,11 +239,38 @@ journalctl -u jaw.service -f
 
 ---
 
-## 8. Contact & Onderhoud
+## 8. Extra aandachtspunten
+
+- **Netwerkvolgorde**  
+  Zet in de `.service` bestanden:
+  ```
+  After=network-online.target
+  Wants=network-online.target
+  ```
+  Zo starten de scripts pas als het netwerk actief is.
+
+- **Firewall**  
+  Als later een firewall wordt gebruikt: poorten 5005 (ogen) en 5006 (kaak) moeten open blijven.
+
+- **USB device voor Dynamixel**  
+  Controleer dat de servo altijd op `/dev/ttyUSB0` zit. Een udev-rule voor een vaste naam kan handig zijn.
+
+- **Backups**  
+  Alle services en scripts staan in GitHub. Nieuwe Pi opzetten = `git clone` en services kopiëren.
+
+---
+
+## 9. Contact & Onderhoud
 
 - Repos:  
   - [kattenoog-left](https://github.com/sebas1984x/kattenoog-left)  
   - [kattenoog-right](https://github.com/sebas1984x/kattenoog-right)
+
+- Alle systemd servicebestanden staan in de `services/` map van de repos.  
+- Bij problemen met GitHub toegang: controleer SSH key op de Pi.
+
+---
+
 
 - Alle systemd servicebestanden staan in de `services/` map van de repos.  
 - Bij problemen met GitHub toegang: controleer SSH key op de Pi.
