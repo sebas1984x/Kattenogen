@@ -6,7 +6,6 @@ Samen sturen ze de ogen en de kaak van een animatronische kat aan.
 ---
 
 ## 1. Overzicht Architectuur
-
 - **Linker Pi (`kattenoog-left`)**
   - Stuurt het linkeroog
   - UDP-poort: 5005
@@ -28,8 +27,6 @@ Samen sturen ze de ogen en de kaak van een animatronische kat aan.
 ---
 
 ## 2. PLC Data Structuur
-
-Per oog zijn 4 variabelen nodig (REAL of INT/byte).
 
 ### Linkeroog (standaard offsets in DB1)
 - `DB1.DBD0`   → look_x  (horizontaal, -1 = uiterste links, +1 = uiterste rechts)
@@ -55,61 +52,36 @@ Per oog zijn 4 variabelen nodig (REAL of INT/byte).
 ---
 
 ## 3. PLC Voorbeelden
-
-- **Knipoog**  
-  Zet `lid` van één oog op 1.0 (dicht) en laat de ander op 0.0 (open).
-
-- **Pupil groter/kleiner**  
-  Schrijf 0..1 (REAL) of 0..255 (byte) naar `pupil`.
-
-- **Oogbeweging**  
-  Stuur -1..+1 (REAL) of 0..255 (byte, 128 = midden) naar `look_x` en `look_y`.
-
-- **Kaakbeweging**  
-  Schrijf een waarde 0..255 naar de variabele die via UDP naar poort 5006 van de rechter Pi wordt gestuurd.  
-  0 = minimale hoek (`min_deg`), 255 = maximale hoek (`max_deg`).
+- **Knipoog** → zet `lid` van één oog op 1.0 (dicht) en laat de ander op 0.0 (open).  
+- **Pupil groter/kleiner** → schrijf 0..1 (REAL) of 0..255 (byte) naar `pupil`.  
+- **Oogbeweging** → stuur -1..+1 (REAL) of 0..255 (byte, 128 = midden) naar `look_x` en `look_y`.  
+- **Kaakbeweging** → schrijf een waarde 0..255 naar de variabele die via UDP naar poort 5006 van de rechter Pi wordt gestuurd.
 
 ---
 
 ## 4. Raspberry Pi Software
 
-### Scripts
+### 4.1 Scripts
 Op beide Pi’s staan de scripts in `/home/cat/kattenoog/`:
 - `kattenoog_plc_udp_oneeye.py` → oogweergave
 - `jaw_udp_dynamixel.py` → kaakservo (alleen rechter Pi)
 - `eyes_send.py` en `jaw_send.py` → testtools
 
-### Systemd services
-De Pi’s starten de scripts automatisch bij boot via systemd.
+### 4.2 Systemd Services
+- Linker Pi → `eye-left.service`  
+- Rechter Pi → `eye.service` en `jaw.service`  
 
-- Linker Pi:
-  - `eye-left.service` (alias: `eye.service`)
-
-- Rechter Pi:
-  - `eye.service`
-  - `jaw.service`
-
-Status bekijken:
+Commando’s:  
 ```
 systemctl status eye.service
 systemctl status jaw.service
-```
-
-Herstarten:
-```
 sudo systemctl restart eye.service
 sudo systemctl restart jaw.service
-```
-
-Logs volgen:
-```
 journalctl -u eye.service -f
 journalctl -u jaw.service -f
 ```
 
-### 4.1 Benodigde pakketten
-
-Voor een correcte werking moeten de volgende pakketten aanwezig zijn:
+### 4.3 Benodigde pakketten
 
 #### Beide Pi’s (ogen)
 - python3
@@ -124,18 +96,11 @@ Voor een correcte werking moeten de volgende pakketten aanwezig zijn:
 
 #### Installatie
 ```bash
-# basis
 sudo apt update
 sudo apt install -y python3 python3-pip git
-
-# pygame
 pip3 install pygame
-
-# dynamixel (alleen rechter Pi)
-pip3 install dynamixel-sdk
-
-# optioneel: snap7
-pip3 install python-snap7
+pip3 install dynamixel-sdk   # alleen rechter Pi
+pip3 install python-snap7    # optioneel
 ```
 
 #### Handigheid: requirements.txt
@@ -149,167 +114,96 @@ pip3 install -r requirements.txt
 ## 5. Installatie & Deployment
 
 ### Eerste keer op een Pi
-1. Repos klonen:
-   ```
-   git clone git@github.com:sebas1984x/kattenoog-left.git /home/cat/kattenoog   # op linker Pi
-   git clone git@github.com:sebas1984x/kattenoog-right.git /home/cat/kattenoog  # op rechter Pi
-   ```
-2. Services kopiëren:
-   ```
-   sudo cp services/*.service /etc/systemd/system/
-   sudo systemctl daemon-reload
-   ```
-3. Services activeren:
-   ```
-   sudo systemctl enable --now eye.service
-   sudo systemctl enable --now jaw.service   # alleen op rechter Pi
-   ```
+```bash
+git clone git@github.com:sebas1984x/kattenoog-left.git /home/cat/kattenoog   # linker Pi
+git clone git@github.com:sebas1984x/kattenoog-right.git /home/cat/kattenoog  # rechter Pi
+
+sudo cp services/*.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+sudo systemctl enable --now eye.service
+sudo systemctl enable --now jaw.service   # alleen rechter Pi
+```
 
 ### Updates
-1. Code ophalen:
-   ```
-   cd /home/cat/kattenoog
-   git pull
-   ```
-2. Services herstarten:
-   ```
-   sudo systemctl restart eye.service
-   sudo systemctl restart jaw.service   # alleen op rechter Pi
-   ```
+```bash
+cd /home/cat/kattenoog
+git pull
+sudo systemctl restart eye.service
+sudo systemctl restart jaw.service   # alleen rechter Pi
+```
 
 ---
 
 ## 6. Netwerk & Poorten
-
-- Ogen luisteren op UDP-poort **5005**
-- Kaak luistert op UDP-poort **5006**
-- Controleer of UDP actief is:
-  ```
+- Ogen luisteren op UDP-poort **5005**  
+- Kaak luistert op UDP-poort **5006**  
+- Controleer met:  
+  ```bash
   sudo netstat -anu | grep 500
   ```
 
 ### 6.1 Vast IP-adres instellen (aanbevolen)
+```bash
+sudo nano /etc/dhcpcd.conf
 
-Voor stabiele communicatie met de PLC moeten beide Pi’s een vast IP-adres krijgen.
+interface eth0
+static ip_address=192.168.0.101/24
+static routers=192.168.0.1
+static domain_name_servers=192.168.0.1
+# voorbeeld: linker Pi = 192.168.0.101, rechter Pi = 192.168.0.102
 
-1. Open het configuratiebestand:
-   ```
-   sudo nano /etc/dhcpcd.conf
-   ```
-
-2. Voeg onderaan toe (pas IP’s en gateway aan naar je netwerk):
-   ```
-   interface eth0
-   static ip_address=192.168.0.101/24
-   static routers=192.168.0.1
-   static domain_name_servers=192.168.0.1
-
-   # voorbeeld: linker Pi = 192.168.0.101, rechter Pi = 192.168.0.102
-   ```
-
-3. Opslaan en rebooten:
-   ```
-   sudo reboot
-   ```
-
-4. Controle:
-   ```
-   ip addr show eth0
-   ping <PLC-IP>
-   ```
+sudo reboot
+ip addr show eth0
+ping <PLC-IP>
+```
 
 ---
 
 ## 7. Troubleshooting
-
-- **Geen beeld van oog**
-  - Check of service draait: `systemctl status eye.service`
-  - Bekijk logs: `journalctl -u eye.service -f`
-  - Controleer of PLC waarden stuurt (via TIA monitor)
-
-- **Kaak beweegt niet**
-  - Check of service draait: `systemctl status jaw.service`
-  - Bekijk logs: `journalctl -u jaw.service -f`
-  - Controleer of de waarde in PLC echt naar UDP-poort 5006 gaat
-  - Controleer of Dynamixel motor is aangesloten op `/dev/ttyUSB0`
-
-- **PLC stuurt waarden, maar geen beweging**
-  - Verzeker je dat DB op **non-optimized** staat
-  - Controleer of je REAL of byte gebruikt (beide mogen, maar consistent instellen)
+- **Geen beeld van oog** → check `eye.service`, logs bekijken.  
+- **Kaak beweegt niet** → check `jaw.service`, USB en logs.  
+- **PLC stuurt maar geen reactie** → DB non-optimized, datatypes consistent.  
 
 ### Netwerk (UTP / eth0)
-- Als je `ip a` uitvoert en `eth0` staat op **DOWN** of **NO-CARRIER**, dan betekent dit dat er geen fysieke link is.
-- Controleer:
-  1. Zit de UTP-kabel goed ingeplugd aan beide kanten (Pi en PLC/switch)?
-  2. Brandt of knippert er een link-ledje bij de netwerkpoort?
-  3. Probeer een andere kabel of poort van de switch/PLC.
-- Als de kabel goed zit maar er is geen DHCP-server, stel dan handmatig een IP-adres in:
+- `NO-CARRIER` betekent: geen fysieke link.  
+- Controle: kabel goed ingeplugd, link-ledjes, andere kabel/poort testen.  
+- Handmatig IP instellen als er geen DHCP is:  
   ```bash
   sudo ip addr add 192.168.0.101/24 dev eth0
   sudo ip link set eth0 up
   ```
-- Controleer daarna met:
-  ```bash
-  ip a show eth0
-  ping <PLC-IP>
-  ```
-- Bij succes staat de interface op **UP** en kun je de PLC pingen.
 
 ---
 
 ## 8. Extra aandachtspunten
-
-- **Netwerkvolgorde**  
-  Zet in de `.service` bestanden:
+- Services pas starten na netwerk:  
   ```
   After=network-online.target
   Wants=network-online.target
   ```
-  Zo starten de scripts pas als het netwerk actief is.
-
-- **Firewall**  
-  Als later een firewall wordt gebruikt: poorten 5005 (ogen) en 5006 (kaak) moeten open blijven.
-
-- **USB device voor Dynamixel**  
-  Controleer dat de servo altijd op `/dev/ttyUSB0` zit. Een udev-rule voor een vaste naam kan handig zijn.
-
-- **Backups**  
-  Alle services en scripts staan in GitHub. Nieuwe Pi opzetten = `git clone` en services kopiëren.
+- Firewall → poorten 5005 en 5006 moeten open.  
+- Dynamixel USB → standaard `/dev/ttyUSB0`, evt. vaste naam via udev-rule.  
+- Backups → alles staat in GitHub. Nieuwe Pi = `git clone` + services kopiëren.
 
 ---
 
-## 9. Contact & Onderhoud
-
-- Repos:  
-  - [kattenoog-left](https://github.com/sebas1984x/kattenoog-left)  
-  - [kattenoog-right](https://github.com/sebas1984x/kattenoog-right)
-
-- Alle systemd servicebestanden staan in de `services/` map van de repos.  
-- Bij problemen met GitHub toegang: controleer SSH key op de Pi.
-
----
-
-
-## 10. Dynamixel XM430 limieten instellen
+## 9. Dynamixel XM430 limieten instellen
 
 De kaak wordt aangedreven door een Dynamixel XM430-servo.  
 Standaard kan deze 0–360° draaien, maar voor de kaak wordt een kleinere veilige range gebruikt (bijv. 200–245°).
 
 ### Via Dynamixel Wizard (aanbevolen)
-1. Sluit de servo aan op een pc met USB2Dynamixel of U2D2.
-2. Start **Dynamixel Wizard 2.0** (van Robotis).
-3. Scan naar de motor (standaard ID = 1, baudrate = 57600).
-4. Zet de **Operating Mode** op *Position Control (Extended Position = uit)*.
-5. Stel de waarden in:
-   - **Min Position Limit** = overeenkomstige tickwaarde voor 200°  
-     Berekening: `200° / 360° * 4096 ≈ 2275`
-   - **Max Position Limit** = overeenkomstige tickwaarde voor 245°  
-     Berekening: `245° / 360° * 4096 ≈ 2788`
-6. Opslaan naar EEPROM → de servo bewaart deze limieten ook na een reboot.
+1. Sluit de servo aan met U2D2 of USB2Dynamixel.
+2. Start **Dynamixel Wizard 2.0**.
+3. Scan motor (ID=1, baud=57600).
+4. Operating Mode = Position Control.
+5. Stel in:  
+   - Min Position Limit ≈ 2275 ticks (200°)  
+   - Max Position Limit ≈ 2788 ticks (245°)  
+6. Opslaan naar EEPROM.
 
-### Via Python (met dynamixel-sdk)
-Eenmalig kan dit ook via Python ingesteld worden:
-
+### Via Python (dynamixel-sdk)
 ```python
 from dynamixel_sdk import *
 
@@ -319,8 +213,7 @@ DXL_ID = 1
 BAUDRATE = 57600
 
 ph = PortHandler('/dev/ttyUSB0')
-ph.openPort()
-ph.setBaudRate(BAUDRATE)
+ph.openPort(); ph.setBaudRate(BAUDRATE)
 pk = PacketHandler(2.0)
 
 def deg_to_tick(deg): 
@@ -336,230 +229,12 @@ print(f"Set limits: {min_tick}–{max_tick} ticks")
 ```
 
 ---
-  De Raspberry Pi’s schalen dit automatisch.
-- Zorg dat de DB in TIA Portal op **non-optimized** staat.
 
----
-
-## 3. PLC Voorbeelden
-
-- **Knipoog**  
-  Zet `lid` van één oog op 1.0 (dicht) en laat de ander op 0.0 (open).
-
-- **Pupil groter/kleiner**  
-  Schrijf 0..1 (REAL) of 0..255 (byte) naar `pupil`.
-
-- **Oogbeweging**  
-  Stuur -1..+1 (REAL) of 0..255 (byte, 128 = midden) naar `look_x` en `look_y`.
-
-- **Kaakbeweging**  
-  Schrijf een waarde 0..255 naar de variabele die via UDP naar poort 5006 van de rechter Pi wordt gestuurd.  
-  0 = minimale hoek (`min_deg`), 255 = maximale hoek (`max_deg`).
-
----
-
-## 4. Raspberry Pi Software
-
-### Scripts
-Op beide Pi’s staan de scripts in `/home/cat/kattenoog/`:
-- `kattenoog_plc_udp_oneeye.py` → oogweergave
-- `jaw_udp_dynamixel.py` → kaakservo (alleen rechter Pi)
-- `eyes_send.py` en `jaw_send.py` → testtools
-
-### Systemd services
-De Pi’s starten de scripts automatisch bij boot via systemd.
-
-- Linker Pi:
-  - `eye-left.service` (alias: `eye.service`)
-
-- Rechter Pi:
-  - `eye.service`
-  - `jaw.service`
-
-Status bekijken:
-```
-systemctl status eye.service
-systemctl status jaw.service
-```
-
-Herstarten:
-```
-sudo systemctl restart eye.service
-sudo systemctl restart jaw.service
-```
-
-Logs volgen:
-```
-journalctl -u eye.service -f
-journalctl -u jaw.service -f
-```
-
----
-
-## 4.1 Benodigde pakketten
-
-Voor een correcte werking moeten de volgende pakketten aanwezig zijn:
-
-### Beide Pi’s (ogen)
-- python3
-- python3-pip
-- pygame
-- git
-- python-snap7 (optioneel, alleen nodig als je direct vanuit de Pi met de PLC wilt testen)
-
-### Rechter Pi (kaak)
-- Alles hierboven
-- dynamixel-sdk (voor aansturing Dynamixel servo’s via USB/RS485)
-
-### Installatie
-```bash
-# basis
-sudo apt update
-sudo apt install -y python3 python3-pip git
-
-# pygame
-pip3 install pygame
-
-# dynamixel (alleen rechter Pi)
-pip3 install dynamixel-sdk
-
-# optioneel: snap7
-pip3 install python-snap7
-```
-
-### Handigheid: requirements.txt
-In de repo kan een `requirements.txt` staan, die installeer je met:
-```bash
-pip3 install -r requirements.txt
-```
-
-## 5. Installatie & Deployment
-
-### Eerste keer op een Pi
-1. Repos klonen:
-   ```
-   git clone git@github.com:sebas1984x/kattenoog-left.git /home/cat/kattenoog   # op linker Pi
-   git clone git@github.com:sebas1984x/kattenoog-right.git /home/cat/kattenoog  # op rechter Pi
-   ```
-2. Services kopiëren:
-   ```
-   sudo cp services/*.service /etc/systemd/system/
-   sudo systemctl daemon-reload
-   ```
-3. Services activeren:
-   ```
-   sudo systemctl enable --now eye.service
-   sudo systemctl enable --now jaw.service   # alleen op rechter Pi
-   ```
-
-### Updates
-1. Code ophalen:
-   ```
-   cd /home/cat/kattenoog
-   git pull
-   ```
-2. Services herstarten:
-   ```
-   sudo systemctl restart eye.service
-   sudo systemctl restart jaw.service   # alleen op rechter Pi
-   ```
-
----
-
-## 6. Netwerk & Poorten
-
-- Ogen luisteren op UDP-poort **5005**
-- Kaak luistert op UDP-poort **5006**
-- Controleer of UDP actief is:
-  ```
-  sudo netstat -anu | grep 500
-  ```
-
-### 6.1 Vast IP-adres instellen (aanbevolen)
-
-Voor stabiele communicatie met de PLC moeten beide Pi’s een vast IP-adres krijgen.
-
-1. Open het configuratiebestand:
-   ```
-   sudo nano /etc/dhcpcd.conf
-   ```
-
-2. Voeg onderaan toe (pas IP’s en gateway aan naar je netwerk):
-   ```
-   interface eth0
-   static ip_address=192.168.0.101/24
-   static routers=192.168.0.1
-   static domain_name_servers=192.168.0.1
-
-   # voorbeeld: linker Pi = 192.168.0.101, rechter Pi = 192.168.0.102
-   ```
-
-3. Opslaan en rebooten:
-   ```
-   sudo reboot
-   ```
-
-4. Controle:
-   ```
-   ip addr show eth0
-   ping <PLC-IP>
-   ```
-
----
-
-## 7. Troubleshooting
-
-- **Geen beeld van oog**
-  - Check of service draait: `systemctl status eye.service`
-  - Bekijk logs: `journalctl -u eye.service -f`
-  - Controleer of PLC waarden stuurt (via TIA monitor)
-
-- **Kaak beweegt niet**
-  - Check of service draait: `systemctl status jaw.service`
-  - Bekijk logs: `journalctl -u jaw.service -f`
-  - Controleer of de waarde in PLC echt naar UDP-poort 5006 gaat
-  - Controleer of Dynamixel motor is aangesloten op `/dev/ttyUSB0`
-
-- **PLC stuurt waarden, maar geen beweging**
-  - Verzeker je dat DB op **non-optimized** staat
-  - Controleer of je REAL of byte gebruikt (beide mogen, maar consistent instellen)
-
----
-
-## 8. Extra aandachtspunten
-
-- **Netwerkvolgorde**  
-  Zet in de `.service` bestanden:
-  ```
-  After=network-online.target
-  Wants=network-online.target
-  ```
-  Zo starten de scripts pas als het netwerk actief is.
-
-- **Firewall**  
-  Als later een firewall wordt gebruikt: poorten 5005 (ogen) en 5006 (kaak) moeten open blijven.
-
-- **USB device voor Dynamixel**  
-  Controleer dat de servo altijd op `/dev/ttyUSB0` zit. Een udev-rule voor een vaste naam kan handig zijn.
-
-- **Backups**  
-  Alle services en scripts staan in GitHub. Nieuwe Pi opzetten = `git clone` en services kopiëren.
-
----
-
-## 9. Contact & Onderhoud
-
+## 10. Contact & Onderhoud
 - Repos:  
   - [kattenoog-left](https://github.com/sebas1984x/kattenoog-left)  
   - [kattenoog-right](https://github.com/sebas1984x/kattenoog-right)
-
-- Alle systemd servicebestanden staan in de `services/` map van de repos.  
-- Bij problemen met GitHub toegang: controleer SSH key op de Pi.
-
----
-
-
-- Alle systemd servicebestanden staan in de `services/` map van de repos.  
-- Bij problemen met GitHub toegang: controleer SSH key op de Pi.
+- Services staan in `services/` map.  
+- Problemen met GitHub → controleer SSH key op de Pi.
 
 ---
